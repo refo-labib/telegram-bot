@@ -1,10 +1,8 @@
-import os
+import os 
 import json
-import threading
 from datetime import datetime
-from flask import Flask, render_template
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from flask import Flask, render_template, request
+from telegram import Bot, Update
 
 # === Flask App ===
 app = Flask(__name__)
@@ -22,8 +20,8 @@ def index():
     return render_template("index.html", reports=reports)
 
 # === Telegram Bot ===
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-os.makedirs("uploads", exist_ok=True)
+TOKEN = os.getenv("7892545779:AAGOW64pmCCGQA1XZW8soZCgcblQWEZcA5U")
+bot = Bot(token=TOKEN)
 
 def save_report(entry):
     data = []
@@ -37,45 +35,38 @@ def save_report(entry):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    caption = update.message.caption or update.message.text or ""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    message = update.message
 
-    entry = {
-        "username": user.username or user.first_name,
-        "caption": caption,
-        "file": None,
-        "timestamp": timestamp
-    }
+    if message:
+        user = message.from_user
+        caption = message.caption or message.text or ""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Simpan foto
-    if update.message.photo:
-        file = await context.bot.get_file(update.message.photo[-1].file_id)
-        filename = f"uploads/{datetime.now().strftime('%Y%m%d%H%M%S')}_photo.jpg"
-        await file.download_to_drive(filename)
-        entry["file"] = filename
+        entry = {
+            "username": user.username or user.first_name,
+            "caption": caption,
+            "file": None,
+            "timestamp": timestamp
+        }
 
-    # Simpan video
-    elif update.message.video:
-        file = await context.bot.get_file(update.message.video.file_id)
-        filename = f"uploads/{datetime.now().strftime('%Y%m%d%H%M%S')}_video.mp4"
-        await file.download_to_drive(filename)
-        entry["file"] = filename
+        # Foto
+        if message.photo:
+            file = bot.get_file(message.photo[-1].file_id)
+            entry["file"] = file.file_path
 
-    save_report(entry)
-    await update.message.reply_text("✅ Laporan kamu sudah direkam!")
+        # Video
+        elif message.video:
+            file = bot.get_file(message.video.file_id)
+            entry["file"] = file.file_path
 
-def run_bot():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(MessageHandler(filters.ALL, handle_message))
-    application.run_polling()
+        save_report(entry)
+        bot.send_message(chat_id=message.chat_id, text="✅ Laporan kamu sudah direkam!")
 
-# === Main Run (gabungan Flask + Bot) ===
+    return "ok"
+
+# === Main Run ===
 if __name__ == "__main__":
-    # Jalankan bot di thread terpisah
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-
-    # Jalankan Flask untuk web
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
