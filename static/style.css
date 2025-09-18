@@ -1,0 +1,10 @@
+body {
+    background: #f8f9fa;
+}
+.card {
+    border-radius: 15px;
+}
+.card img, .card video {
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+}
