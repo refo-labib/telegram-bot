@@ -20,7 +20,7 @@ def index():
     return render_template("index.html", reports=reports)
 
 # === Telegram Bot ===
-TOKEN = os.getenv("7892545779:AAGOW64pmCCGQA1XZW8soZCgcblQWEZcA5U")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = Bot(token=TOKEN)
 
 def save_report(entry):
