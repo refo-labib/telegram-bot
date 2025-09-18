@@ -1,61 +1,45 @@
 import os
-import json
+import csv
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-from datetime import datetime
+from telegram.ext import Application, MessageHandler, CommandHandler, ContextTypes, filters
 
-# Ambil token dari Environment Variable
-TOKEN = os.getenv("7892545779:AAGOW64pmCCGQA1XZW8soZCgcblQWEZcA5U")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CSV_FILE = "rekap.csv"
 
-# Pastikan ada folder uploads
-os.makedirs("uploads", exist_ok=True)
+# Inisialisasi bot application
+application = Application.builder().token(TOKEN).build()
 
-# File database sederhana
-DB_FILE = "data.json"
 
-def save_report(entry):
-    """Simpan data laporan ke file JSON"""
-    data = []
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            try:
-                data = json.load(f)
-            except:
-                data = []
-    data.append(entry)
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+# Command /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Halo! Kirimkan teks atau gambar untuk direkap.")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    caption = update.message.caption or update.message.text or ""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    entry = {
-        "username": user.username or user.first_name,
-        "caption": caption,
-        "file": None,
-        "timestamp": timestamp
-    }
+# Handler untuk pesan teks
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    text = update.message.text
 
-    # Kalau user kirim foto
-    if update.message.photo:
-        file = await context.bot.get_file(update.message.photo[-1].file_id)
-        filename = f"uploads/{datetime.now().strftime('%Y%m%d%H%M%S')}_photo.jpg"
-        await file.download_to_drive(filename)
-        entry["file"] = filename
+    with open(CSV_FILE, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow([user.username, text])
 
-    # Kalau user kirim video
-    elif update.message.video:
-        file = await context.bot.get_file(update.message.video.file_id)
-        filename = f"uploads/{datetime.now().strftime('%Y%m%d%H%M%S')}_video.mp4"
-        await file.download_to_drive(filename)
-        entry["file"] = filename
+    await update.message.reply_text("Pesanmu sudah direkap ✅")
 
-    save_report(entry)
-    await update.message.reply_text("✅ Laporan kamu sudah direkam!")
 
-def run_bot():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
-    app.run_polling()
+# Handler untuk gambar/photo
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    photo = update.message.photo[-1].file_id  # ambil resolusi terbesar
+
+    with open(CSV_FILE, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow([user.username, f"Photo ID: {photo}"])
+
+    await update.message.reply_text("Gambar kamu sudah direkap 🖼️✅")
+
+
+# Register handler
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
